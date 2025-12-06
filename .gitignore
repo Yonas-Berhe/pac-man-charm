@@ -23,8 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 
-
-_pycache_
-•venv
-•pytest_cache
+# Python
+__pycache__/
+.venv/
+.pytest_cache/
 *.db
+
+# Environment
+.env
