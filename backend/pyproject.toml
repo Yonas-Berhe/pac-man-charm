@@ -5,13 +5,24 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiosqlite>=0.21.0",
+    "alembic>=1.17.2",
+    "asyncpg>=0.31.0",
     "email-validator>=2.3.0",
     "fastapi>=0.123.8",
+    "greenlet>=3.3.0",
     "httpx>=0.28.1",
     "passlib>=1.7.4",
     "pyjwt>=2.10.1",
     "pytest>=9.0.1",
     "pytest-asyncio>=1.3.0",
     "python-multipart>=0.0.20",
+    "sqlalchemy>=2.0.44",
     "uvicorn>=0.38.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+filterwarnings = [
+    "ignore:'crypt' is deprecated:DeprecationWarning",
 ]

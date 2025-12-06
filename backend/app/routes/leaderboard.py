@@ -1,11 +1,15 @@
 """
 Leaderboard routes.
+Updated for async SQLAlchemy.
 """
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import LeaderboardResponse, LeaderboardPeriod, UserRank
-from app.database import db
+from app.db.connection import get_db
+from app.db.repository import LeaderboardRepository
+from app.db.models import User
 from app.auth import get_current_user
 
 
@@ -14,30 +18,21 @@ router = APIRouter(prefix="/leaderboard", tags=["Leaderboard"])
 
 @router.get("", response_model=LeaderboardResponse)
 async def get_leaderboard(
+    period: LeaderboardPeriod = Query(LeaderboardPeriod.ALL_TIME),
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    period: LeaderboardPeriod = Query(LeaderboardPeriod.ALL_TIME)
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get global leaderboard."""
-    entries, total = db.get_leaderboard(period.value, limit, offset)
-    
-    formatted_entries = []
-    for entry in entries:
-        formatted_entries.append({
-            "rank": entry["rank"],
-            "user": {
-                "id": entry["user"]["id"],
-                "username": entry["user"]["username"],
-                "avatar_url": entry["user"].get("avatar_url"),
-                "high_score": entry["user"]["high_score"],
-                "games_played": entry["user"]["games_played"],
-            },
-            "score": entry["score"],
-            "achievedAt": entry["achieved_at"],
-        })
+    """Get leaderboard rankings."""
+    leaderboard_repo = LeaderboardRepository(db)
+    entries, total = await leaderboard_repo.get_leaderboard(
+        period=period.value,
+        limit=limit,
+        offset=offset
+    )
     
     return {
-        "entries": formatted_entries,
+        "entries": entries,
         "total": total,
         "period": period,
     }
@@ -46,8 +41,11 @@ async def get_leaderboard(
 @router.get("/me", response_model=UserRank)
 async def get_my_rank(
     period: LeaderboardPeriod = Query(LeaderboardPeriod.ALL_TIME),
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get current user's rank."""
-    rank_info = db.get_user_rank(current_user["id"], period.value)
+    """Get current user's rank on the leaderboard."""
+    leaderboard_repo = LeaderboardRepository(db)
+    rank_info = await leaderboard_repo.get_user_rank(current_user.id, period.value)
+    
     return rank_info

@@ -21,11 +21,19 @@ dev:
 
 # Run tests
 test:
-	uv run pytest -v
+	uv run pytest tests/ -v
 
 # Run tests with coverage
 test-cov:
-	uv run pytest -v --cov=app --cov-report=term-missing
+	uv run pytest tests/ -v --cov=app --cov-report=term-missing
+
+# Run integration tests
+test-integration:
+	uv run pytest tests_integration/ -v
+
+# Run all tests
+test-all:
+	uv run pytest tests/ tests_integration/ -v
 
 # Run linter (requires ruff to be installed)
 lint:

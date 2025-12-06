@@ -1,77 +1,89 @@
 """
 User routes.
+Updated for async SQLAlchemy.
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import User, PublicUser, UpdateUserRequest, UserStats
-from app.database import db
+from app.models import User as UserModel, PublicUser, UpdateUserRequest, UserStats
+from app.db.connection import get_db
+from app.db.repository import UserRepository, GameRepository, get_user_stats
+from app.db.models import User
 from app.auth import get_current_user
 
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-@router.get("/me", response_model=User)
-async def get_current_user_profile(current_user: dict = Depends(get_current_user)):
+@router.get("/me", response_model=UserModel)
+async def get_current_user_profile(current_user: User = Depends(get_current_user)):
     """Get current user profile."""
-    return current_user
+    return current_user.to_dict()
 
 
-@router.patch("/me", response_model=User)
-async def update_current_user_profile(
+@router.patch("/me", response_model=UserModel)
+async def update_current_user(
     request: UpdateUserRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """Update current user profile."""
-    update_data = {}
-    if request.username is not None:
-        # Check if username is taken
-        for user in db.users.values():
-            if user["username"] == request.username and user["id"] != current_user["id"]:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail={"code": "USERNAME_TAKEN", "message": "Username is already taken"}
-                )
-        update_data["username"] = request.username
+    user_repo = UserRepository(db)
     
-    if request.avatar_url is not None:
-        update_data["avatar_url"] = request.avatar_url
+    # Check if new username is taken
+    if request.username and request.username != current_user.username:
+        if await user_repo.username_exists(request.username):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "CONFLICT", "message": "Username already exists"}
+            )
     
-    updated_user = db.update_user(current_user["id"], **update_data)
-    return updated_user
+    updated_user = await user_repo.update(
+        current_user,
+        username=request.username,
+        avatar_url=request.avatar_url
+    )
+    
+    return updated_user.to_dict()
 
 
 @router.get("/{user_id}", response_model=PublicUser)
-async def get_user_by_id(user_id: str):
-    """Get user by ID (public profile)."""
-    user = db.get_user_by_id(user_id)
+async def get_user_by_id(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Get public user profile."""
+    user_repo = UserRepository(db)
+    user = await user_repo.get_by_id(user_id)
+    
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "USER_NOT_FOUND", "message": "User not found"}
+            detail={"code": "NOT_FOUND", "message": "User not found"}
         )
-    return user
+    
+    return {
+        "id": user.id,
+        "username": user.username,
+        "avatar_url": user.avatar_url,
+        "high_score": user.high_score,
+        "games_played": user.games_played,
+    }
 
 
 @router.get("/{user_id}/stats", response_model=UserStats)
-async def get_user_stats(user_id: str):
+async def get_user_statistics(user_id: str, db: AsyncSession = Depends(get_db)):
     """Get user game statistics."""
-    stats = db.get_user_stats(user_id)
-    if not stats:
+    user_repo = UserRepository(db)
+    game_repo = GameRepository(db)
+    
+    user = await user_repo.get_by_id(user_id)
+    
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "USER_NOT_FOUND", "message": "User not found"}
+            detail={"code": "NOT_FOUND", "message": "User not found"}
         )
-    return {
-        "userId": stats["user_id"],
-        "gamesPlayed": stats["games_played"],
-        "gamesWon": stats["games_won"],
-        "gamesLost": stats["games_lost"],
-        "winRate": stats["win_rate"],
-        "highScore": stats["high_score"],
-        "averageScore": stats["average_score"],
-        "totalDotsCollected": stats["total_dots_collected"],
-        "totalGhostsEaten": stats["total_ghosts_eaten"],
-        "totalPlayTime": stats["total_play_time"],
-    }
+    
+    games, _ = await game_repo.get_user_games(user_id, limit=1000)
+    stats = get_user_stats(user, games)
+    
+    return stats

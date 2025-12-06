@@ -1,15 +1,19 @@
 """
 JWT Authentication utilities.
+Updated for async SQLAlchemy.
 """
 
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
 from fastapi import HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import db
+from app.db.connection import get_db
+from app.db.repository import UserRepository
 
 
 # Configuration
@@ -35,14 +39,15 @@ def create_access_token(user_id: str) -> tuple[str, int]:
         "sub": user_id,
         "exp": expire,
         "type": "access",
+        "jti": str(uuid.uuid4()),  # Unique token ID
     }
     
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     return token, int(expires_delta.total_seconds())
 
 
-def create_refresh_token(user_id: str) -> str:
-    """Create a new refresh token."""
+def create_refresh_token(user_id: str) -> tuple[str, datetime]:
+    """Create a new refresh token and return it with expiry time."""
     expires_delta = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     expire = utc_now() + expires_delta
     
@@ -50,11 +55,11 @@ def create_refresh_token(user_id: str) -> str:
         "sub": user_id,
         "exp": expire,
         "type": "refresh",
+        "jti": str(uuid.uuid4()),  # Unique token ID
     }
     
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-    db.store_refresh_token(token, user_id)
-    return token
+    return token, expire
 
 
 def verify_token(token: str, token_type: str = "access") -> Optional[str]:
@@ -70,7 +75,10 @@ def verify_token(token: str, token_type: str = "access") -> Optional[str]:
         return None
 
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
     """Get the current authenticated user."""
     token = credentials.credentials
     user_id = verify_token(token, "access")
@@ -81,7 +89,9 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             detail={"code": "INVALID_TOKEN", "message": "Invalid or expired token"},
         )
     
-    user = db.get_user_by_id(user_id)
+    user_repo = UserRepository(db)
+    user = await user_repo.get_by_id(user_id)
+    
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -91,7 +101,10 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     return user
 
 
-def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))) -> Optional[dict]:
+async def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+    db: AsyncSession = Depends(get_db)
+):
     """Get the current user if authenticated, otherwise None."""
     if not credentials:
         return None
@@ -102,4 +115,5 @@ def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] = Depe
     if not user_id:
         return None
     
-    return db.get_user_by_id(user_id)
+    user_repo = UserRepository(db)
+    return await user_repo.get_by_id(user_id)
