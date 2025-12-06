@@ -84,6 +84,9 @@ export const useGameLogic = () => {
     score: 0,
     lives: 3,
     gameStatus: 'idle',
+    dotsCollectedCount: 0,
+    powerDotsCollectedCount: 0,
+    ghostsEatenCount: 0,
   }));
 
   const nextDirection = useRef<Direction>(null);
@@ -105,6 +108,9 @@ export const useGameLogic = () => {
       score: 0,
       lives: 3,
       gameStatus: 'playing',
+      dotsCollectedCount: 0,
+      powerDotsCollectedCount: 0,
+      ghostsEatenCount: 0,
     });
     nextDirection.current = null;
   }, []);
@@ -120,7 +126,7 @@ export const useGameLogic = () => {
       a: 'left',
       d: 'right',
     };
-    
+
     if (dirMap[e.key]) {
       e.preventDefault();
       nextDirection.current = dirMap[e.key];
@@ -163,19 +169,24 @@ export const useGameLogic = () => {
         let newPowerDots = prev.powerDots;
         let newScore = prev.score;
         let newGhosts = prev.ghosts;
+        let dotsCollected = prev.dotsCollectedCount;
+        let powerDotsCollected = prev.powerDotsCollectedCount;
+        let ghostsEaten = prev.ghostsEatenCount;
 
         const dotIndex = newDots.findIndex(d => d.x === newPacmanPos.x && d.y === newPacmanPos.y);
         if (dotIndex !== -1) {
           newDots = newDots.filter((_, i) => i !== dotIndex);
           newScore += 10;
+          dotsCollected++;
         }
 
         const powerDotIndex = newPowerDots.findIndex(d => d.x === newPacmanPos.x && d.y === newPacmanPos.y);
         if (powerDotIndex !== -1) {
           newPowerDots = newPowerDots.filter((_, i) => i !== powerDotIndex);
           newScore += 50;
+          powerDotsCollected++;
           newGhosts = newGhosts.map(g => ({ ...g, isScared: true }));
-          
+
           if (scaredTimer.current) clearTimeout(scaredTimer.current);
           scaredTimer.current = setTimeout(() => {
             setGameState(s => ({
@@ -233,6 +244,7 @@ export const useGameLogic = () => {
             if (ghost.isScared) {
               // Eat ghost
               newScore += 200;
+              ghostsEaten++;
               ghost.position = getGhostSpawns()[0];
               ghost.isScared = false;
             } else {
@@ -264,6 +276,9 @@ export const useGameLogic = () => {
           score: newScore,
           lives: newLives,
           gameStatus: newStatus,
+          dotsCollectedCount: dotsCollected,
+          powerDotsCollectedCount: powerDotsCollected,
+          ghostsEatenCount: ghostsEaten,
         };
       });
     }, 180);

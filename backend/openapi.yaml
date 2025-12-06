@@ -1,0 +1,772 @@
+openapi: 3.0.3
+info:
+  title: Pac-Man Game API
+  description: |
+    Backend API for the Pac-Man game application.
+    
+    ## Features
+    - User authentication (register, login, logout)
+    - Leaderboard system with high scores
+    - Game session tracking
+    - User profile management
+  version: 1.0.0
+  contact:
+    name: API Support
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+  - url: https://api.pacman-game.com/v1
+    description: Production server
+
+tags:
+  - name: Auth
+    description: User authentication endpoints
+  - name: Users
+    description: User profile management
+  - name: Leaderboard
+    description: High scores and rankings
+  - name: Games
+    description: Game session management
+
+paths:
+  # ============================================
+  # Authentication Endpoints
+  # ============================================
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Register a new user
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Username or email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login user
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Logout user
+      operationId: logoutUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================================
+  # User Endpoints
+  # ============================================
+  /users/me:
+    get:
+      tags:
+        - Users
+      summary: Get current user profile
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      tags:
+        - Users
+      summary: Update current user profile
+      operationId: updateCurrentUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}:
+    get:
+      tags:
+        - Users
+      summary: Get user by ID (public profile)
+      operationId: getUserById
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicUser'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{userId}/stats:
+    get:
+      tags:
+        - Users
+      summary: Get user game statistics
+      operationId: getUserStats
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStats'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================================
+  # Leaderboard Endpoints
+  # ============================================
+  /leaderboard:
+    get:
+      tags:
+        - Leaderboard
+      summary: Get global leaderboard
+      operationId: getLeaderboard
+      parameters:
+        - name: limit
+          in: query
+          description: Number of entries to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: offset
+          in: query
+          description: Offset for pagination
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: period
+          in: query
+          description: Time period filter
+          schema:
+            type: string
+            enum: [all_time, monthly, weekly, daily]
+            default: all_time
+      responses:
+        '200':
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaderboardResponse'
+
+  /leaderboard/me:
+    get:
+      tags:
+        - Leaderboard
+      summary: Get current user's rank
+      operationId: getMyRank
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [all_time, monthly, weekly, daily]
+            default: all_time
+      responses:
+        '200':
+          description: User's rank information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRank'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================================
+  # Game Session Endpoints
+  # ============================================
+  /games:
+    post:
+      tags:
+        - Games
+      summary: Start a new game session
+      operationId: startGame
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Game session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameSession'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags:
+        - Games
+      summary: Get user's game history
+      operationId: getGameHistory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Game history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameHistoryResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /games/{gameId}:
+    get:
+      tags:
+        - Games
+      summary: Get game session details
+      operationId: getGameSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Game session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameSession'
+        '404':
+          description: Game not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /games/{gameId}/end:
+    post:
+      tags:
+        - Games
+      summary: End a game session and submit score
+      operationId: endGame
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndGameRequest'
+      responses:
+        '200':
+          description: Game ended successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameResult'
+        '400':
+          description: Invalid game state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Game not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================================
+  # Health Check
+  # ============================================
+  /health:
+    get:
+      summary: Health check endpoint
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ============================================
+    # Request Schemas
+    # ============================================
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 20
+          pattern: '^[a-zA-Z0-9_]+$'
+          example: pacman_player
+        email:
+          type: string
+          format: email
+          example: player@example.com
+        password:
+          type: string
+          minLength: 8
+          format: password
+          example: SecurePass123!
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 20
+        avatarUrl:
+          type: string
+          format: uri
+
+    EndGameRequest:
+      type: object
+      required:
+        - finalScore
+        - result
+      properties:
+        finalScore:
+          type: integer
+          minimum: 0
+          description: Final score achieved
+          example: 15340
+        result:
+          type: string
+          enum: [won, lost]
+          description: Game outcome
+        dotsCollected:
+          type: integer
+          minimum: 0
+          description: Total dots collected
+        powerDotsCollected:
+          type: integer
+          minimum: 0
+          description: Power dots collected
+        ghostsEaten:
+          type: integer
+          minimum: 0
+          description: Number of ghosts eaten
+        livesRemaining:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Lives remaining at end
+        duration:
+          type: integer
+          minimum: 0
+          description: Game duration in seconds
+
+    # ============================================
+    # Response Schemas
+    # ============================================
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        accessToken:
+          type: string
+          description: JWT access token
+        refreshToken:
+          type: string
+          description: JWT refresh token
+        expiresIn:
+          type: integer
+          description: Token expiry in seconds
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+        highScore:
+          type: integer
+          description: User's personal high score
+        gamesPlayed:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PublicUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+        highScore:
+          type: integer
+        gamesPlayed:
+          type: integer
+
+    UserStats:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        gamesPlayed:
+          type: integer
+        gamesWon:
+          type: integer
+        gamesLost:
+          type: integer
+        winRate:
+          type: number
+          format: float
+          description: Win rate as percentage (0-100)
+        highScore:
+          type: integer
+        averageScore:
+          type: number
+          format: float
+        totalDotsCollected:
+          type: integer
+        totalGhostsEaten:
+          type: integer
+        totalPlayTime:
+          type: integer
+          description: Total play time in seconds
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+        user:
+          $ref: '#/components/schemas/PublicUser'
+        score:
+          type: integer
+        achievedAt:
+          type: string
+          format: date-time
+
+    LeaderboardResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeaderboardEntry'
+        total:
+          type: integer
+          description: Total number of entries
+        period:
+          type: string
+          enum: [all_time, monthly, weekly, daily]
+
+    UserRank:
+      type: object
+      properties:
+        rank:
+          type: integer
+          nullable: true
+          description: User's rank (null if not on leaderboard)
+        score:
+          type: integer
+        percentile:
+          type: number
+          format: float
+          description: Percentile ranking (0-100)
+        period:
+          type: string
+
+    GameSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [active, completed, abandoned]
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        finalScore:
+          type: integer
+          nullable: true
+        result:
+          type: string
+          enum: [won, lost]
+          nullable: true
+
+    GameResult:
+      type: object
+      properties:
+        game:
+          $ref: '#/components/schemas/GameSession'
+        isHighScore:
+          type: boolean
+          description: Whether this is a new personal high score
+        previousHighScore:
+          type: integer
+          nullable: true
+        newRank:
+          type: integer
+          nullable: true
+          description: New leaderboard rank if applicable
+
+    GameHistoryResponse:
+      type: object
+      properties:
+        games:
+          type: array
+          items:
+            $ref: '#/components/schemas/GameSession'
+        total:
+          type: integer
+
+    SuccessMessage:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Operation successful
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Invalid input provided
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error details

@@ -75,6 +75,10 @@
     background: radial-gradient(ellipse at center, hsl(230 25% 12%) 0%, hsl(230 25% 4%) 100%);
   }
 
+  .game-header {
+    @apply absolute top-4 left-4 right-4 flex justify-between items-center;
+  }
+
   .game-board {
     @apply relative;
     box-shadow: var(--glow-maze), 0 0 40px hsl(220 100% 50% / 0.3);
