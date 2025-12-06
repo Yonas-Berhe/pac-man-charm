@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/.venv/
+
+# Build artifacts
+frontend/dist/
+*.pyc
+__pycache__/
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Tests
+backend/tests/
+backend/tests_integration/
+*.db
+
+# Misc
+*.log
+.DS_Store

@@ -1,0 +1,44 @@
+# Combined deployment container + database
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: pacman-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pacman}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pacman_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-pacman}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pacman}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pacman-network
+
+  # Combined app (frontend + backend)
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: pacman-app
+    ports:
+      - "80:80"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pacman}:${POSTGRES_PASSWORD:-pacman_secret}@postgres:5432/${POSTGRES_DB:-pacman}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - pacman-network
+
+volumes:
+  postgres_data:
+
+
+networks:
+  pacman-network:
+    driver: bridge
